@@ -1,6 +1,4 @@
-use oculussdk_sys::{
-    ovrTextureSwapChainDesc_, ovr_Create, ovr_CreateTextureSwapChainVk, ovr_Destroy, ovr_Initialize,
-};
+use oculussdk_sys::{ovrTextureSwapChainDesc_, ovr_Create, ovr_CreateTextureSwapChainVk, ovr_Destroy, ovr_Initialize, ovr_GetTextureSwapChainBufferVk, ovr_GetTextureSwapChainLength, ovr_GetSessionPhysicalDeviceVk};
 use {
     crate::{Error, Result},
     libc::c_char,
@@ -23,6 +21,9 @@ pub struct Session {
     raw: ovrSession,
     luid: ovrGraphicsLuid,
 }
+unsafe impl Send for Session {}
+unsafe impl Sync for Session {}
+
 
 impl Session {
     pub fn initialize(
@@ -59,7 +60,7 @@ impl Session {
         layers: u32,
         mips: u32,
         samples: ash::vk::SampleCountFlags,
-    ) -> Result<ash::vk::SwapchainKHR> {
+    ) -> Result<(ash::vk::SwapchainKHR, Vec<ash::vk::Image>)> {
         use oculussdk_sys::{
             ovrTextureBindFlags__ovrTextureBind_DX_UnorderedAccess,
             ovrTextureFormat__OVR_FORMAT_B4G4R4A4_UNORM,
@@ -142,9 +143,62 @@ impl Session {
             ))?;
         }
         let swapchain = unsafe{
-            transmute(swapchain.assume_init())
+            swapchain.assume_init()
         };
-        Ok(swapchain)
+
+        let mut swapchain_images = 0;
+
+        unsafe{
+            check_error(
+                ovr_GetTextureSwapChainLength(self.raw, swapchain, &mut swapchain_images)
+            )?;
+        }
+
+        let mut images = Vec::with_capacity(swapchain_images as usize);
+        for i in 0..swapchain_images as usize{
+            let mut image = unsafe{
+                MaybeUninit::uninit()
+            };
+
+            unsafe{
+                check_error(
+                    ovr_GetTextureSwapChainBufferVk(self.raw, swapchain, i as _, image.as_mut_ptr())
+                )?;
+            }
+
+            images.push(
+                unsafe{
+                    transmute(image.assume_init())
+                }
+            );
+        }
+
+
+
+        let swapchain = unsafe{
+           transmute(swapchain)
+        };
+
+        Ok((swapchain, images))
+    }
+
+    pub fn get_physical_device(&self, instance: ash::vk::Instance) -> Result<ash::vk::PhysicalDevice>{
+
+        let mut out = unsafe{
+            MaybeUninit::uninit()
+        };
+
+        unsafe{
+            check_error(
+                ovr_GetSessionPhysicalDeviceVk(self.raw, self.luid, transmute(instance), out.as_mut_ptr())
+            )?;
+        }
+
+        Ok(
+            unsafe{
+                transmute(out.assume_init())
+            }
+        )
     }
 }
 
