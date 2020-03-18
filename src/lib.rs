@@ -1,16 +1,9 @@
-mod types;
-mod session;
 mod error;
+mod session;
+mod types;
 
 pub use self::{
-    types::{
-        *
-    },
-    session::{
-        Session
-    },
-    error::{
-        Error, Result,
-    }
+    error::{Error, Result},
+    session::{Session, Swapchain},
+    types::*,
 };
-
