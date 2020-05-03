@@ -9,5 +9,5 @@ edition = "2018"
 [dependencies]
 oculussdk-sys = "0.1.0"
 libc = "0.2"
-ash = "0.29"
+ash = "0.30"
 smallvec = "1.2.0"
